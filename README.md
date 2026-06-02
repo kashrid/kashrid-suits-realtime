@@ -8,13 +8,23 @@ payment updates, delivery tracking, and future driver events.
 ```bash
 PORT=4000
 FRONTEND_ORIGIN=http://localhost:3000
-SOCKET_INTERNAL_SECRET=replace-with-at-least-20-chars
+SOCKET_INTERNAL_SECRET=replace-with-at-least-32-chars
 ```
 
 `SOCKET_INTERNAL_SECRET` is used in two places:
 
 - Internal REST calls from the Next.js app via `x-socket-secret`.
 - HMAC-signed browser socket tokens created by the Next.js app.
+
+For production, set `FRONTEND_ORIGIN` to the deployed Kashrid frontend URL.
+Multiple frontend origins can be comma-separated:
+
+```bash
+FRONTEND_ORIGIN=https://kashrid.example.com,https://admin.kashrid.example.com
+```
+
+Use a high-entropy `SOCKET_INTERNAL_SECRET` with at least 32 characters. This
+secret must never be exposed to browser code.
 
 ## Run
 
@@ -45,12 +55,29 @@ Payload:
   sub: string;
   role: "admin" | "customer" | "driver";
   orderPublicIds?: string[];
+  iat?: number;
   exp: number;
 }
 ```
 
 Admin sockets automatically join `admin:orders`. Customer sockets may only join
-order or delivery rooms listed in `orderPublicIds`.
+order or delivery rooms listed in `orderPublicIds`. Driver sockets may only join
+delivery rooms listed in `orderPublicIds`.
+
+Tokens larger than 4096 characters are rejected. Tokens must be short-lived;
+the realtime server rejects token lifetimes longer than 10 minutes when `iat` is
+present. The Next.js app currently issues five-minute tokens.
+
+## Production Security Notes
+
+- Only configured `FRONTEND_ORIGIN` values are accepted by HTTP CORS and Socket.io.
+- Socket.io handshakes must include an allowed browser origin.
+- Internal event endpoints require `x-socket-secret`.
+- Internal shared secrets are compared with constant-time checks.
+- Internal payloads use strict validation and reject unknown fields.
+- Internal endpoints include a small per-IP rate limit.
+- Socket messages are capped with `maxHttpBufferSize`.
+- Room joins are authorized from signed token claims, not from client trust.
 
 ## Browser Socket Events
 

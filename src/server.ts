@@ -18,14 +18,33 @@ import { z } from "zod";
 
 const app = express();
 
+const allowedOrigins = new Set(env.FRONTEND_ORIGINS);
+
+// Allows configured frontend origins while still permitting non-browser HTTP clients.
+function isAllowedHttpOrigin(origin?: string) {
+  return !origin || allowedOrigins.has(origin);
+}
+
+// Requires browser socket handshakes to come from a configured frontend origin.
+function isAllowedSocketOrigin(origin?: string) {
+  return Boolean(origin && allowedOrigins.has(origin));
+}
+
 app.use(helmet());
 app.use(
   cors({
-    origin: env.FRONTEND_ORIGIN,
+    origin(origin, callback) {
+      if (isAllowedHttpOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin is not allowed"));
+    },
     credentials: true,
   }),
 );
-app.use(express.json({ limit: "50kb" }));
+app.use(express.json({ limit: "20kb" }));
 
 app.use(healthRouter);
 app.use(internalOrderEventsRouter);
@@ -34,11 +53,21 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: env.FRONTEND_ORIGIN,
+    origin(origin, callback) {
+      if (isAllowedSocketOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin is not allowed"), false);
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
   transports: ["websocket", "polling"],
+  maxHttpBufferSize: 10_000,
+  pingInterval: 25_000,
+  pingTimeout: 20_000,
 });
 
 setSocketServer(io);
@@ -49,10 +78,19 @@ const joinOrderRoomSchema = z.object({
 
 io.use((socket, next) => {
   try {
+    if (!isAllowedSocketOrigin(socket.handshake.headers.origin)) {
+      next(new Error("Unauthorized origin"));
+      return;
+    }
+
     socket.data.realtimeUser = verifyRealtimeToken(socket.handshake.auth?.token);
     next();
   } catch (error) {
-    next(error instanceof Error ? error : new Error("Unauthorized socket"));
+    console.warn("Socket authentication failed", {
+      socketId: socket.id,
+      reason: error instanceof Error ? error.message : "Unknown error",
+    });
+    next(new Error("Unauthorized socket"));
   }
 });
 
@@ -114,7 +152,8 @@ io.on("connection", (socket) => {
 
     const canJoinDeliveryRoom =
       realtimeUser.role === "admin" ||
-      realtimeUser.role === "driver" ||
+      (realtimeUser.role === "driver" &&
+        realtimeUser.orderPublicIds.includes(result.data.orderPublicId)) ||
       realtimeUser.orderPublicIds.includes(result.data.orderPublicId);
 
     if (!canJoinDeliveryRoom) {

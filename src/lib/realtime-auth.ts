@@ -3,12 +3,15 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@/config/env";
 import { z } from "zod";
 
+const MAX_TOKEN_TTL_SECONDS = 60 * 10;
+
 export const realtimeRoleSchema = z.enum(["admin", "customer", "driver"]);
 
 export const realtimeTokenPayloadSchema = z.object({
   sub: z.string().min(1).max(128),
   role: realtimeRoleSchema,
-  orderPublicIds: z.array(z.string().min(6).max(100)).default([]),
+  orderPublicIds: z.array(z.string().min(6).max(100)).max(100).default([]),
+  iat: z.number().int().positive().optional(),
   exp: z.number().int().positive(),
 });
 
@@ -28,17 +31,39 @@ function sign(encodedPayload: string) {
     .digest("base64url");
 }
 
+// Parses and validates the encoded token payload without leaking parse errors.
+function parseRealtimeTokenPayload(encodedPayload: string) {
+  try {
+    return realtimeTokenPayloadSchema.parse(
+      JSON.parse(base64UrlDecode(encodedPayload)),
+    );
+  } catch {
+    throw new Error("Invalid realtime token payload");
+  }
+}
+
 export function createRealtimeToken(payload: RealtimeTokenPayload) {
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
   return `${encodedPayload}.${sign(encodedPayload)}`;
 }
 
+// Verifies a short-lived HMAC token issued by the trusted Next.js app.
 export function verifyRealtimeToken(token: unknown) {
   if (typeof token !== "string") {
     throw new Error("Missing realtime token");
   }
 
-  const [encodedPayload, receivedSignature] = token.split(".");
+  if (token.length > 4096) {
+    throw new Error("Realtime token is too large");
+  }
+
+  const tokenParts = token.split(".");
+
+  if (tokenParts.length !== 2) {
+    throw new Error("Invalid realtime token");
+  }
+
+  const [encodedPayload, receivedSignature] = tokenParts;
 
   if (!encodedPayload || !receivedSignature) {
     throw new Error("Invalid realtime token");
@@ -55,12 +80,19 @@ export function verifyRealtimeToken(token: unknown) {
     throw new Error("Invalid realtime token signature");
   }
 
-  const payload = realtimeTokenPayloadSchema.parse(
-    JSON.parse(base64UrlDecode(encodedPayload)),
-  );
+  const payload = parseRealtimeTokenPayload(encodedPayload);
+  const now = Date.now();
 
-  if (payload.exp * 1000 < Date.now()) {
+  if (payload.exp * 1000 < now) {
     throw new Error("Realtime token expired");
+  }
+
+  if (payload.iat && payload.iat * 1000 > now + 30_000) {
+    throw new Error("Realtime token issued in the future");
+  }
+
+  if (payload.iat && payload.exp - payload.iat > MAX_TOKEN_TTL_SECONDS) {
+    throw new Error("Realtime token lifetime is too long");
   }
 
   return payload;
