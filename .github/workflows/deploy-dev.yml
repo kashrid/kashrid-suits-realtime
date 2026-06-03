@@ -1,4 +1,4 @@
-name: Deploy Dev Socket Server
+name: Deploy Dev Realtime Server
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to VPS
+      - name: Deploy Dev Realtime Server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -28,8 +28,8 @@ jobs:
             git fetch origin dev
             git reset --hard origin/dev
 
-            bun install
-            bun run build
+            bun install --frozen-lockfile
+            bun run typecheck
 
             pm2 restart kashrid-suite-realtime-dev || pm2 start "bun run start" --name kashrid-suite-realtime-dev
 

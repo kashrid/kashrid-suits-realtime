@@ -4,17 +4,17 @@ import {
   orderRoom,
   setSocketServer,
 } from "@/lib/socket";
-import { verifyRealtimeToken } from "@/lib/realtime-auth";
 
 import { Server } from "socket.io";
 import cors from "cors";
 import { createServer } from "http";
-import { env } from "@/config/env";
+import { env } from "@/config/env.ts";
 import express from "express";
 import { healthRouter } from "@/routes/health.route";
 import helmet from "helmet";
 import { internalDeliveryEventsRouter } from "@/routes/internal-delivery-events.route";
 import { internalOrderEventsRouter } from "@/routes/internal-order-events.route";
+import { verifyRealtimeToken } from "@/lib/realtime-auth";
 import { z } from "zod";
 
 const app = express();
@@ -85,7 +85,9 @@ io.use((socket, next) => {
       return;
     }
 
-    socket.data.realtimeUser = verifyRealtimeToken(socket.handshake.auth?.token);
+    socket.data.realtimeUser = verifyRealtimeToken(
+      socket.handshake.auth?.token,
+    );
     next();
   } catch (error) {
     console.warn("Socket authentication failed", {

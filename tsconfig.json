@@ -1,38 +1,27 @@
 {
   "compilerOptions": {
-    // Environment setup & latest features
     "lib": ["ESNext"],
     "target": "ESNext",
-    "module": "Preserve",
-    "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
 
-    // Bundler mode
+    "module": "Preserve",
     "moduleResolution": "bundler",
+
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
-    // Silence TS6 deprecation warning
-    "ignoreDeprecations": "6.0",
-
-    // Path aliases
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     },
 
-    // Best practices
+    "ignoreDeprecations": "6.0",
+
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-
-    // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
-  }
+    "noImplicitOverride": true
+  },
+  "include": ["src/**/*.ts"]
 }
