@@ -13,6 +13,7 @@ import { env } from "@/config/env";
 import express from "express";
 import { healthRouter } from "@/routes/health.route";
 import helmet from "helmet";
+import { internalDeliveryEventsRouter } from "@/routes/internal-delivery-events.route";
 import { internalOrderEventsRouter } from "@/routes/internal-order-events.route";
 import { z } from "zod";
 
@@ -48,6 +49,7 @@ app.use(express.json({ limit: "20kb" }));
 
 app.use(healthRouter);
 app.use(internalOrderEventsRouter);
+app.use(internalDeliveryEventsRouter);
 
 const httpServer = createServer(app);
 

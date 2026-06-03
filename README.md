@@ -94,8 +94,11 @@ Server emits:
 - `order-room-joined` with `{ orderPublicId }`
 - `delivery-room-joined` with `{ orderPublicId }`
 - `admin:new-order`
+- `admin:delivery-assigned`
+- `admin:delivery-status-updated`
 - `customer:order-status-updated`
 - `customer:payment-success`
+- `customer:delivery-status-updated`
 - `customer:delivery-tracking-updated`
 - `delivery:tracking-updated`
 - `socket-error` with `{ message }`
@@ -146,6 +149,9 @@ Payload:
     | "pending"
     | "confirmed"
     | "preparing"
+    | "ready_for_pickup"
+    | "assigned_to_driver"
+    | "picked_up"
     | "out_for_delivery"
     | "delivered"
     | "cancelled";
@@ -173,6 +179,67 @@ Payload:
 ```
 
 Emits `customer:payment-success` to `order:<orderPublicId>`.
+
+### Delivery Assigned
+
+```http
+POST /internal/delivery-assigned
+```
+
+Payload:
+
+```ts
+{
+  orderPublicId: string;
+  orderStatus:
+    | "assigned_to_driver";
+  paymentStatus: "pending" | "paid" | "failed" | "refunded";
+  deliveryProvider: "pidge";
+  deliveryStatus: string;
+  riderName?: string;
+  riderPhone?: string;
+  trackingUrl?: string;
+  updatedAt?: string;
+}
+```
+
+Emits `admin:delivery-assigned` to `admin:orders`,
+`customer:order-status-updated` and `customer:delivery-status-updated` to
+`order:<orderPublicId>`, and `delivery:tracking-updated` to
+`delivery:<orderPublicId>`.
+
+### Delivery Status Updated
+
+```http
+POST /internal/delivery-status-updated
+```
+
+Payload:
+
+```ts
+{
+  orderPublicId: string;
+  orderStatus:
+    | "ready_for_pickup"
+    | "assigned_to_driver"
+    | "picked_up"
+    | "out_for_delivery"
+    | "delivered"
+    | "cancelled";
+  paymentStatus: "pending" | "paid" | "failed" | "refunded";
+  deliveryProvider: "pidge";
+  deliveryStatus: string;
+  riderName?: string;
+  riderPhone?: string;
+  trackingUrl?: string;
+  updatedAt?: string;
+}
+```
+
+Emits `admin:delivery-status-updated` to `admin:orders`,
+`customer:order-status-updated` and `customer:delivery-status-updated` to
+`order:<orderPublicId>`, and `delivery:tracking-updated` to
+`delivery:<orderPublicId>`.
 
 ### Delivery Tracking Updated
 
