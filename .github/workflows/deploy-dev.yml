@@ -1,4 +1,4 @@
-name: Deploy Dev Realtime Server
+name: Deploy Dev Socket Server
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy Dev Realtime Server
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -23,21 +23,14 @@ jobs:
             export BUN_INSTALL="$HOME/.bun"
             export PATH="$BUN_INSTALL/bin:$PATH"
 
-            APP_NAME="kashrid-suite-realtime-dev"
-            APP_DIR="/var/www/kashrid-suite-realtime-dev"
-
-            cd "$APP_DIR"
+            cd /var/www/kashrid-suite-realtime-dev
 
             git fetch origin dev
             git reset --hard origin/dev
 
-            bun install --frozen-lockfile
-            bun run typecheck
+            bun install
+            bun run build
 
-            if pm2 describe "$APP_NAME" > /dev/null; then
-              pm2 restart "$APP_NAME" --update-env
-            else
-              pm2 start "bun run start" --name "$APP_NAME"
-            fi
+            pm2 restart kashrid-suite-realtime-dev || pm2 start "bun run start" --name kashrid-suite-realtime-dev
 
             pm2 save
