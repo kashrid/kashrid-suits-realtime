@@ -264,4 +264,12 @@ Payload:
 Emits `customer:delivery-tracking-updated` to `order:<orderPublicId>` and
 `delivery:tracking-updated` to `delivery:<orderPublicId>`.
 
-# Added github work flow
+# Added github work flow\
+
+# Domains names
+
+https://kashrid.com → Next.js production
+https://www.kashrid.com → Next.js production
+https://dev.kashrid.com → Next.js dev
+https://socket.kashrid.com → Socket.IO production
+https://dev-socket.kashrid.com → Socket.IO dev

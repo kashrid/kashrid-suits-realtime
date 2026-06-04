@@ -14,7 +14,8 @@ const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter(Boolean),
     )
-    .pipe(z.array(z.string().url()).min(1)),
+    .pipe(z.array(z.string().url()).min(1))
+    .transform((origins) => origins.map((origin) => new URL(origin).origin)),
   SOCKET_INTERNAL_SECRET: z.string().min(32),
 });
 
