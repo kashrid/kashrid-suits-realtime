@@ -1,30 +1,101 @@
-name: Deploy Dev Realtime Server
+name: Deploy Dev
 
 on:
   push:
     branches:
       - dev
+    paths-ignore:
+      - "**/*.md"
+      - ".gitignore"
+      - ".vscode/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy Dev Realtime Server
+      - name: Deploy Dev Frontend
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          TARGET_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          timeout: 60s
+          command_timeout: 15m
+          envs: TARGET_SHA
           script: |
-            set -e
+            set -euo pipefail
+
+            APP_NAME="kashrid-suite-dev"
+            APP_DIR="/var/www/kashrid-suite-dev"
+            APP_PORT="3001"
+
+            echo "Starting dev deploy for $TARGET_SHA"
+
             export BUN_INSTALL="$HOME/.bun"
             export PATH="$BUN_INSTALL/bin:$PATH"
-            cd /var/www/kashrid-suite-realtime-dev
-            git fetch origin dev
-            git reset --hard origin/dev
-            bun install --frozen-lockfile
-            bun run typecheck
-            pm2 restart kashrid-suite-realtime-dev || pm2 start "bun run start" --name kashrid-suite-realtime-dev
+
+            cd "$APP_DIR"
+
+            git fetch origin dev --prune
+
+            if ! git cat-file -e "$TARGET_SHA^{commit}" 2>/dev/null; then
+              echo "Target SHA was not fetched directly; using origin/dev."
+              TARGET_SHA="$(git rev-parse origin/dev)"
+            fi
+
+            CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
+            if [ -n "$CURRENT_SHA" ]; then
+              CHANGED_FILES="$(git diff --name-only "$CURRENT_SHA" "$TARGET_SHA" || true)"
+            else
+              CHANGED_FILES="initial-deploy"
+            fi
+
+            if [ -z "$CHANGED_FILES" ]; then
+              echo "No file changes to deploy."
+              exit 0
+            fi
+
+            echo "Deploying changed files:"
+            echo "$CHANGED_FILES"
+
+            git reset --hard "$TARGET_SHA"
+
+            if echo "$CHANGED_FILES" | grep -Eq '(^|/)(package\.json|bun\.lock)$' || [ ! -d node_modules ]; then
+              bun install --frozen-lockfile
+            else
+              echo "Dependency files unchanged; skipping bun install."
+            fi
+
+            echo "Starting Next.js build..."
+            bun run build
+            echo "Build completed."
+
+            pm2 delete "$APP_NAME" || true
+
+            PORT_PIDS="$(lsof -ti tcp:"$APP_PORT" || true)"
+            if [ -n "$PORT_PIDS" ]; then
+              echo "Killing processes using port $APP_PORT:"
+              echo "$PORT_PIDS"
+              kill $PORT_PIDS || true
+              sleep 2
+            fi
+
+            PORT_PIDS="$(lsof -ti tcp:"$APP_PORT" || true)"
+            if [ -n "$PORT_PIDS" ]; then
+              echo "Force killing processes still using port $APP_PORT:"
+              echo "$PORT_PIDS"
+              kill -9 $PORT_PIDS || true
+            fi
+
+            pm2 start "bun run start -- -p $APP_PORT" --name "$APP_NAME" --time
+
             pm2 save

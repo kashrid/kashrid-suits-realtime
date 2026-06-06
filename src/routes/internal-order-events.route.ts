@@ -29,13 +29,16 @@ const orderStatusSchema = z.enum([
   "cancelled",
 ]);
 
-const newPaidOrderSchema = z.object({
+const newOrderSchema = z.object({
   orderPublicId: z.string().min(6).max(100),
   orderNumber: z.string().min(1).max(100),
   customerName: z.string().min(1).max(160),
+  customerPhone: z.string().max(40).optional(),
+  orderType: z.string().min(1).max(80).optional(),
   totalAmount: z.number().nonnegative(),
   paymentMethod: paymentMethodSchema,
-  paymentStatus: z.literal("paid"),
+  paymentStatus: paymentStatusSchema,
+  orderStatus: orderStatusSchema.optional(),
   createdAt: z.string().datetime(),
 }).strict();
 
@@ -66,7 +69,7 @@ internalOrderEventsRouter.post("/internal/admin-new-order", (req, res) => {
     return unauthorized(res);
   }
 
-  const result = newPaidOrderSchema.safeParse(req.body);
+  const result = newOrderSchema.safeParse(req.body);
 
   if (!result.success) {
     return invalidPayload(res, result.error);
@@ -140,7 +143,7 @@ internalOrderEventsRouter.post("/internal/new-paid-order", (req, res) => {
     return unauthorized(res);
   }
 
-  const result = newPaidOrderSchema.safeParse(req.body);
+  const result = newOrderSchema.safeParse(req.body);
 
   if (!result.success) {
     return invalidPayload(res, result.error);
