@@ -1,0 +1,80 @@
+name: Deploy Production Realtime Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production-realtime
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate Deployment Secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          test -n "$VPS_HOST" || { echo "::error::Missing VPS_HOST secret."; exit 1; }
+          test -n "$VPS_USER" || { echo "::error::Missing VPS_USER secret."; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "::error::Missing VPS_SSH_KEY secret."; exit 1; }
+
+      - name: Deploy Production Realtime Server
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TARGET_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          timeout: 60s
+          command_timeout: 10m
+          envs: TARGET_SHA
+          script: |
+            set -euo pipefail
+
+            APP_NAME="kashrid-suite-realtime"
+            APP_DIR="/var/www/kashrid-suite-realtime"
+
+            echo "Starting production realtime deploy for $TARGET_SHA"
+
+            export BUN_INSTALL="$HOME/.bun"
+            export PATH="$BUN_INSTALL/bin:$PATH"
+
+            cd "$APP_DIR"
+
+            git fetch origin main --prune
+
+            if ! git cat-file -e "$TARGET_SHA^{commit}" 2>/dev/null; then
+              echo "Target SHA was not fetched directly; using origin/main."
+              TARGET_SHA="$(git rev-parse origin/main)"
+            fi
+
+            git reset --hard "$TARGET_SHA"
+
+            bun install --frozen-lockfile
+            bun run typecheck
+
+            if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+              pm2 restart "$APP_NAME" --update-env
+            else
+              pm2 start "bun run start" --name "$APP_NAME" --time
+            fi
+
+            pm2 save
+
+            sleep 2
+            curl --fail --silent --show-error --max-time 15 \
+              https://socket.kashrid.com/health
+
+            echo
+            echo "Production realtime deployment completed."
