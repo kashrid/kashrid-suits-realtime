@@ -1,17 +1,13 @@
-name: Deploy Dev
+name: Deploy Dev Realtime Server
 
 on:
   push:
     branches:
       - dev
-    paths-ignore:
-      - "**/*.md"
-      - ".gitignore"
-      - ".vscode/**"
   workflow_dispatch:
 
 concurrency:
-  group: deploy-dev
+  group: deploy-dev-realtime
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +15,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy Dev Frontend
+      - name: Validate Deployment Secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          test -n "$VPS_HOST" || { echo "::error::Missing VPS_HOST secret."; exit 1; }
+          test -n "$VPS_USER" || { echo "::error::Missing VPS_USER secret."; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "::error::Missing VPS_SSH_KEY secret."; exit 1; }
+
+      - name: Deploy Dev Realtime Server
         uses: appleboy/ssh-action@v1.2.0
         env:
           TARGET_SHA: ${{ github.sha }}
@@ -29,16 +37,15 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           timeout: 60s
-          command_timeout: 15m
+          command_timeout: 10m
           envs: TARGET_SHA
           script: |
             set -euo pipefail
 
-            APP_NAME="kashrid-suite-dev"
-            APP_DIR="/var/www/kashrid-suite-dev"
-            APP_PORT="3001"
+            APP_NAME="kashrid-suite-realtime-dev"
+            APP_DIR="/var/www/kashrid-suite-realtime-dev"
 
-            echo "Starting dev deploy for $TARGET_SHA"
+            echo "Starting dev realtime deploy for $TARGET_SHA"
 
             export BUN_INSTALL="$HOME/.bun"
             export PATH="$BUN_INSTALL/bin:$PATH"
@@ -52,50 +59,22 @@ jobs:
               TARGET_SHA="$(git rev-parse origin/dev)"
             fi
 
-            CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
-            if [ -n "$CURRENT_SHA" ]; then
-              CHANGED_FILES="$(git diff --name-only "$CURRENT_SHA" "$TARGET_SHA" || true)"
-            else
-              CHANGED_FILES="initial-deploy"
-            fi
-
-            if [ -z "$CHANGED_FILES" ]; then
-              echo "No file changes to deploy."
-              exit 0
-            fi
-
-            echo "Deploying changed files:"
-            echo "$CHANGED_FILES"
-
             git reset --hard "$TARGET_SHA"
 
-            if echo "$CHANGED_FILES" | grep -Eq '(^|/)(package\.json|bun\.lock)$' || [ ! -d node_modules ]; then
-              bun install --frozen-lockfile
+            bun install --frozen-lockfile
+            bun run typecheck
+
+            if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+              pm2 restart "$APP_NAME" --update-env
             else
-              echo "Dependency files unchanged; skipping bun install."
+              pm2 start "bun run start" --name "$APP_NAME" --time
             fi
-
-            echo "Starting Next.js build..."
-            bun run build
-            echo "Build completed."
-
-            pm2 delete "$APP_NAME" || true
-
-            PORT_PIDS="$(lsof -ti tcp:"$APP_PORT" || true)"
-            if [ -n "$PORT_PIDS" ]; then
-              echo "Killing processes using port $APP_PORT:"
-              echo "$PORT_PIDS"
-              kill $PORT_PIDS || true
-              sleep 2
-            fi
-
-            PORT_PIDS="$(lsof -ti tcp:"$APP_PORT" || true)"
-            if [ -n "$PORT_PIDS" ]; then
-              echo "Force killing processes still using port $APP_PORT:"
-              echo "$PORT_PIDS"
-              kill -9 $PORT_PIDS || true
-            fi
-
-            pm2 start "bun run start -- -p $APP_PORT" --name "$APP_NAME" --time
 
             pm2 save
+
+            sleep 2
+            curl --fail --silent --show-error --max-time 15 \
+              https://dev-socket.kashrid.com/health
+
+            echo
+            echo "Dev realtime deployment completed."
