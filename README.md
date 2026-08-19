@@ -1,7 +1,7 @@
 # Kashrid Realtime Socket.io Server
 
 Dedicated Socket.io server for Kashrid order notifications, order tracking,
-payment updates, delivery tracking, and future driver events.
+payment updates, delivery tracking, and future driver events..
 
 ## Environment
 
