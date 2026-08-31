@@ -8,3 +8,10 @@ healthRouter.get("/health", (_req, res) => {
     service: "kashrid-suits-realtime",
   });
 });
+
+healthRouter.get("/ok", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "kashrid-suits-realtime",
+  });
+});
