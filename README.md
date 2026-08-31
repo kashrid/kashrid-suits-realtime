@@ -273,3 +273,5 @@ https://www.kashrid.com → Next.js production
 https://dev.kashrid.com → Next.js dev
 https://socket.kashrid.com → Socket.IO production
 https://dev-socket.kashrid.com → Socket.IO dev
+
+# This will come sooon
