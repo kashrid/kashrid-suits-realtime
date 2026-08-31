@@ -35,6 +35,7 @@ const newOrderSchema = z.object({
   customerName: z.string().min(1).max(160),
   customerPhone: z.string().max(40).optional(),
   orderType: z.string().min(1).max(80).optional(),
+  fulfillmentType: z.enum(["delivery", "pickup"]).optional(),
   totalAmount: z.number().nonnegative(),
   paymentMethod: paymentMethodSchema,
   paymentStatus: paymentStatusSchema,
@@ -132,6 +133,7 @@ internalOrderEventsRouter.post("/internal/payment-success", (req, res) => {
     "customer:payment-success",
     payload,
   );
+  io.to(ADMIN_ORDERS_ROOM).emit("admin:payment-status-updated", payload);
 
   return res.json({
     ok: true,
