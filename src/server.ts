@@ -1,5 +1,6 @@
 import {
   ADMIN_ORDERS_ROOM,
+  POS_ORDERS_ROOM,
   deliveryRoom,
   orderRoom,
   setSocketServer,
@@ -106,6 +107,11 @@ io.on("connection", (socket) => {
   if (realtimeUser.role === "admin") {
     socket.join(ADMIN_ORDERS_ROOM);
     socket.emit("admin:orders-room-joined");
+  }
+
+  if (realtimeUser.role === "pos") {
+    socket.join(POS_ORDERS_ROOM);
+    socket.emit("pos:orders-room-joined");
   }
 
   socket.on("join-order-room", (payload) => {

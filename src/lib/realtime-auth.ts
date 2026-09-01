@@ -5,7 +5,12 @@ import { z } from "zod";
 
 const MAX_TOKEN_TTL_SECONDS = 60 * 10;
 
-export const realtimeRoleSchema = z.enum(["admin", "customer", "driver"]);
+export const realtimeRoleSchema = z.enum([
+  "admin",
+  "pos",
+  "customer",
+  "driver",
+]);
 
 export const realtimeTokenPayloadSchema = z.object({
   sub: z.string().min(1).max(128),

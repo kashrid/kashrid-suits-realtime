@@ -3,6 +3,7 @@ import type { Server } from "socket.io";
 let io: Server | null = null;
 
 export const ADMIN_ORDERS_ROOM = "admin:orders";
+export const POS_ORDERS_ROOM = "pos:orders";
 
 export function setSocketServer(server: Server) {
   io = server;

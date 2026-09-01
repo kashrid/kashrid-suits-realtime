@@ -36,6 +36,7 @@ bun run dev
 ## Rooms
 
 - Admin order room: `admin:orders`
+- Approved, unlocked POS order room: `pos:orders`
 - Customer order room: `order:<orderPublicId>`
 - Delivery room: `delivery:<orderPublicId>`
 
@@ -53,7 +54,7 @@ Payload:
 ```ts
 {
   sub: string;
-  role: "admin" | "customer" | "driver";
+  role: "admin" | "pos" | "customer" | "driver";
   orderPublicIds?: string[];
   iat?: number;
   exp: number;
@@ -94,6 +95,9 @@ Server emits:
 - `order-room-joined` with `{ orderPublicId }`
 - `delivery-room-joined` with `{ orderPublicId }`
 - `admin:new-order`
+- `admin:order-status-updated`
+- `pos:new-order` (all newly placed online orders; least-privilege payload without customer identity, contact, address, payment method, or amount)
+- `pos:order-status-updated`
 - `admin:delivery-assigned`
 - `admin:delivery-status-updated`
 - `customer:order-status-updated`

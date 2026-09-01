@@ -1,5 +1,6 @@
 import {
   ADMIN_ORDERS_ROOM,
+  POS_ORDERS_ROOM,
   getSocketServer,
   orderRoom,
 } from "@/lib/socket";
@@ -26,36 +27,62 @@ const orderStatusSchema = z.enum([
   "picked_up",
   "out_for_delivery",
   "delivered",
+  "collected",
   "cancelled",
 ]);
 
-const newOrderSchema = z.object({
-  orderPublicId: z.string().min(6).max(100),
-  orderNumber: z.string().min(1).max(100),
-  customerName: z.string().min(1).max(160),
-  customerPhone: z.string().max(40).optional(),
-  orderType: z.string().min(1).max(80).optional(),
-  fulfillmentType: z.enum(["delivery", "pickup"]).optional(),
-  totalAmount: z.number().nonnegative(),
-  paymentMethod: paymentMethodSchema,
-  paymentStatus: paymentStatusSchema,
-  orderStatus: orderStatusSchema.optional(),
-  createdAt: z.string().datetime(),
-}).strict();
+const newOrderSchema = z
+  .object({
+    orderPublicId: z.string().min(6).max(100),
+    orderNumber: z.string().min(1).max(100),
+    customerName: z.string().min(1).max(160),
+    customerPhone: z.string().max(40).optional(),
+    orderType: z.string().min(1).max(80).optional(),
+    fulfillmentType: z.enum(["delivery", "pickup"]).optional(),
+    totalAmount: z.number().nonnegative(),
+    paymentMethod: paymentMethodSchema,
+    paymentStatus: paymentStatusSchema,
+    orderStatus: orderStatusSchema.optional(),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
 
-const orderStatusUpdatedSchema = z.object({
-  orderPublicId: z.string().min(6).max(100),
-  orderStatus: orderStatusSchema,
-  paymentStatus: paymentStatusSchema,
-  updatedAt: z.string().datetime().optional(),
-}).strict();
+const orderStatusUpdatedSchema = z
+  .object({
+    orderPublicId: z.string().min(6).max(100),
+    orderStatus: orderStatusSchema,
+    paymentStatus: paymentStatusSchema,
+    updatedAt: z.string().datetime().optional(),
+  })
+  .strict();
 
-const paymentSuccessSchema = z.object({
-  orderPublicId: z.string().min(6).max(100),
-  paymentStatus: z.literal("paid"),
-  updatedAt: z.string().datetime().optional(),
-}).strict();
+const paymentSuccessSchema = z
+  .object({
+    orderPublicId: z.string().min(6).max(100),
+    paymentStatus: z.literal("paid"),
+    updatedAt: z.string().datetime().optional(),
+  })
+  .strict();
 
+// POS alerts deliberately exclude customer identity, contact, address, method,
+// and amount. Payment status is required to keep preparation locked until paid.
+function getPosNewOrderPayload(order: z.infer<typeof newOrderSchema>) {
+  return {
+    orderPublicId: order.orderPublicId,
+    orderNumber: order.orderNumber,
+    fulfillmentType: order.fulfillmentType,
+    paymentStatus: order.paymentStatus,
+    orderStatus: order.orderStatus,
+    createdAt: order.createdAt,
+  };
+}
+
+function emitNewOrder(order: z.infer<typeof newOrderSchema>) {
+  const io = getSocketServer();
+
+  io.to(ADMIN_ORDERS_ROOM).emit("admin:new-order", order);
+  io.to(POS_ORDERS_ROOM).emit("pos:new-order", getPosNewOrderPayload(order));
+}
 
 internalOrderEventsRouter.use((req, res, next) => {
   if (!rateLimitInternalEvents(req, res)) {
@@ -76,9 +103,7 @@ internalOrderEventsRouter.post("/internal/admin-new-order", (req, res) => {
     return invalidPayload(res, result.error);
   }
 
-  const io = getSocketServer();
-
-  io.to(ADMIN_ORDERS_ROOM).emit("admin:new-order", result.data);
+  emitNewOrder(result.data);
 
   return res.json({
     ok: true,
@@ -106,6 +131,12 @@ internalOrderEventsRouter.post("/internal/order-status-updated", (req, res) => {
     "customer:order-status-updated",
     payload,
   );
+  io.to(ADMIN_ORDERS_ROOM).emit("admin:order-status-updated", payload);
+  io.to(POS_ORDERS_ROOM).emit("pos:order-status-updated", {
+    orderPublicId: payload.orderPublicId,
+    orderStatus: payload.orderStatus,
+    updatedAt: payload.updatedAt,
+  });
 
   return res.json({
     ok: true,
@@ -151,9 +182,7 @@ internalOrderEventsRouter.post("/internal/new-paid-order", (req, res) => {
     return invalidPayload(res, result.error);
   }
 
-  const io = getSocketServer();
-
-  io.to(ADMIN_ORDERS_ROOM).emit("admin:new-order", result.data);
+  emitNewOrder(result.data);
 
   return res.json({
     ok: true,
