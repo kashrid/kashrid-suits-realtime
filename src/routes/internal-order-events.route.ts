@@ -18,6 +18,7 @@ export const internalOrderEventsRouter = Router();
 
 const paymentMethodSchema = z.enum(["online", "cod"]);
 const paymentStatusSchema = z.enum(["pending", "paid", "failed", "refunded"]);
+const paymentPlanSchema = z.enum(["full", "party_advance_50"]);
 const orderStatusSchema = z.enum([
   "pending",
   "confirmed",
@@ -42,6 +43,10 @@ const newOrderSchema = z
     totalAmount: z.number().nonnegative(),
     paymentMethod: paymentMethodSchema,
     paymentStatus: paymentStatusSchema,
+    paymentPlan: paymentPlanSchema.optional(),
+    advancePaymentStatus: paymentStatusSchema.optional(),
+    amountPaid: z.number().nonnegative().optional(),
+    balanceAmount: z.number().nonnegative().optional(),
     orderStatus: orderStatusSchema.optional(),
     createdAt: z.string().datetime(),
   })
@@ -60,6 +65,15 @@ const paymentSuccessSchema = z
   .object({
     orderPublicId: z.string().min(6).max(100),
     paymentStatus: z.literal("paid"),
+    orderNumber: z.string().min(1).max(100).optional(),
+    customerName: z.string().min(1).max(160).optional(),
+    customerPhone: z.string().max(40).optional(),
+    totalAmount: z.number().nonnegative().optional(),
+    paymentMethod: paymentMethodSchema.optional(),
+    paymentPlan: paymentPlanSchema.optional(),
+    advancePaymentStatus: paymentStatusSchema.optional(),
+    amountPaid: z.number().nonnegative().optional(),
+    balanceAmount: z.number().nonnegative().optional(),
     updatedAt: z.string().datetime().optional(),
   })
   .strict();
